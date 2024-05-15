@@ -1,0 +1,126 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.widgets import Slider
+
+class QuantumParticle:
+    def __init__(self, x_start, y_start, vx_init=0.1, vy_init=0.2, charge=1.0):
+        self.x = x_start
+        self.y = y_start
+        self.vx = vx_init  # Initial velocity in the x-direction
+        self.vy = vy_init  # Initial velocity in the y-direction
+        self.charge = charge
+        self.psi = self.gaussian_wave_packet(x_start, y_start)
+
+    def gaussian_wave_packet(self, x0, y0, sigma=0.5):
+        x_vals = np.linspace(-5, 5, 100)
+        y_vals = np.linspace(-5, 5, 100)
+        X, Y = np.meshgrid(x_vals, y_vals)
+        psi = np.exp(-((X - x0)**2 + (Y - y0)**2) / (2 * sigma**2)) / (2 * np.pi * sigma**2)  # Normalize
+        return psi
+
+    def evolve(self, dt, other_particles):
+        # Update particle position based on its velocity
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+
+        # Initialize new wave function
+        new_psi = np.zeros_like(self.psi, dtype=complex)
+
+        # Apply transformations due to other particles
+        for particle in other_particles:
+            if particle != self:
+                dx = particle.x - self.x
+                dy = particle.y - self.y
+                distance_squared = dx**2 + dy**2
+                distance = np.sqrt(distance_squared)
+                repulsion_strength = 1.0  # Adjust as needed
+                repulsion_energy = repulsion_strength / distance_squared
+                # Calculate the complex factor
+                complex_factor = np.exp(-1j * repulsion_energy * dt).astype(complex)
+                # Perform the multiplication
+                new_psi += self.psi * complex_factor
+
+        # Assign the new wave function
+        self.psi = new_psi
+
+
+    def probability_density(self, X, Y):
+        return np.abs(self.psi)**2
+
+def plot(particle_list):
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    x_vals = np.linspace(-5, 5, 100)
+    y_vals = np.linspace(-5, 5, 100)
+    X, Y = np.meshgrid(x_vals, y_vals)
+
+    Z = np.zeros_like(X)
+    for particle in particle_list:
+        Z += particle.probability_density(X, Y)
+
+    surface = ax.plot_surface(X, Y, Z, cmap='RdYlGn')
+
+    ax.set_xlabel('X Position (nm)')
+    ax.set_ylabel('Y Position (nm)')
+    ax.set_zlabel('Probability Density')
+
+    ax.set_xlim(-5, 5)  # Fixing the x-axis limits
+    ax.set_ylim(-5, 5)  # Fixing the y-axis limits
+
+    ax_time = fig.add_axes([0.25, 0.02, 0.65, 0.03], facecolor='lightgoldenrodyellow')
+    slider_time = Slider(ax_time, 'Time', 0, 10, valinit=0, valstep=0.01)
+
+    def update(val):
+        time = slider_time.val
+        for particle in particle_list:
+            # Evolve each particle with respect to other particles
+            particle.evolve(time, particle_list)
+        normalize_wave_functions(particle_list)
+        redraw_plot()
+
+    slider_time.on_changed(update)
+
+    def redraw_plot():
+        nonlocal surface
+        Z = np.zeros_like(X)
+        vzs = []  # Initialize an empty list for z-values
+        for particle in particle_list:
+            probability_density = particle.probability_density(X, Y)
+            Z += probability_density
+            if hasattr(particle, 'scatter') and particle.scatter:  # Check if scatter plot exists
+                # Update position of the red dot
+                particle.scatter._offsets3d = (particle.x, particle.y, probability_density.max())
+                # Update size of the red dot based on probability density
+                particle.scatter._sizes = [probability_density.max() * 1000]  # Adjust scaling as needed
+            vzs.append(probability_density.max())  # Collect max probability densities for scatter plot
+        
+        vzs = np.array(vzs)  # Convert to numpy array for indexing
+        if len(vzs) >= 5:
+            z_markers_idx = np.argsort(vzs)[-5:]  # Get indices of the top 5 max probability densities
+        else:
+            z_markers_idx = np.arange(len(vzs))  # Use all indices if less than 5 particles
+        
+        print("vzs:", vzs)
+        print("z_markers_idx:", z_markers_idx)
+
+        surface.remove()  # Remove old surface plot
+        surface = ax.plot_surface(X, Y, Z, cmap='RdYlGn')  # Plot new surface
+        plt.draw()
+
+    def normalize_wave_functions(particle_list):
+        total_integral = 0.0
+        for particle in particle_list:
+            total_integral += np.sum(np.abs(particle.psi)**2)
+        normalization_factor = 1 / np.sqrt(total_integral)
+        for particle in particle_list:
+            particle.psi *= normalization_factor
+
+    plt.show()
+
+if __name__ == "__main__":
+    particle1 = QuantumParticle(0, 0, vx_init=0.1, vy_init=0.2)
+    particle2 = QuantumParticle(2, 2, vx_init=0.2, vy_init=0.3)
+    particle3 = QuantumParticle(-3, 1, vx_init=0.15, vy_init=0.25)
+    plot([particle1, particle2, particle3])
