@@ -1,0 +1,79 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+class Electron:
+    def __init__(self, momentum, resolution=200):
+        global g
+        g = 1
+        self.momentum = momentum
+        self.resolution = resolution
+        self.probability_density = np.zeros((resolution, resolution, resolution))
+        self.calculate_probability_density()
+
+    def wave_function(self, x, y, z):
+        h_bar = 1  # Reduced Planck's constant (set to 1 for simplicity)
+        k = self.momentum / h_bar
+        omega = np.linalg.norm(self.momentum) / h_bar  # Angular frequency
+        return np.exp(1j * (k[0] * x + k[1] * y + k[2] * z - omega * 0))
+        g += 1
+        print(g)
+
+    def calculate_probability_density(self):
+        for i in range(self.resolution):
+            for j in range(self.resolution):
+                for k in range(self.resolution):
+                    x = (i - self.resolution / 2) / self.resolution
+                    y = (j - self.resolution / 2) / self.resolution
+                    z = (k - self.resolution / 2) / self.resolution
+                    self.probability_density[i, j, k] = np.abs(self.wave_function(x, y, z))**2
+
+class Display3D:
+    def __init__(self, electron):
+        self.electron = electron
+
+    def display(self):
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        resolution = self.electron.resolution
+        x = np.linspace(-1, 1, resolution)
+        y = np.linspace(-1, 1, resolution)
+        z = np.linspace(-1, 1, resolution)
+        X, Y, Z = np.meshgrid(x, y, z)
+
+        # Flatten the arrays for plotting
+        X = X.flatten()
+        Y = Y.flatten()
+        Z = Z.flatten()
+
+        # Flatten the probability density array
+        elevations = 10 * self.electron.probability_density / np.max(self.electron.probability_density)
+        elevations = elevations.flatten()
+
+        ax.plot_trisurf(X, Y, Z, cmap=plt.cm.viridis, linewidth=0.2, antialiased=True)
+
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+
+        # Set aspect ratio to equal
+        ax.set_box_aspect([1,1,1])
+
+        # Add zoom-in button
+        ax.view_init(elev=30, azim=45)  # Set initial view angle
+        ax_buttons = plt.axes([0.85, 0.85, 0.1, 0.05])
+        button = plt.Button(ax_buttons, 'Zoom In', color='lightgoldenrodyellow', hovercolor='0.975')
+
+        def zoom_in(event):
+            ax.view_init(elev=ax.elev + 10, azim=ax.azim)
+
+        button.on_clicked(zoom_in)
+
+        plt.show()
+
+momentum = np.array([3, 0, 0])  # Momentum of the electron in kg m/s
+electron = Electron(momentum)
+display = Display3D(electron)
+display.display()
+
